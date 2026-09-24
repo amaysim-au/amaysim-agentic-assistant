@@ -2,38 +2,18 @@ import { Search } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { MaysiAvatar } from '../components/MaysiAvatar';
-import { useAppState } from '../store/appState';
-
-type Mode = 'chatbot' | 'maysi';
 
 const topics = ['Usage', 'Data', 'Plans', 'Roaming', 'Account', 'eSIM'];
-const maysiPrompts = [
-  'Plan a weekend away',
-  'Explain something to me',
-  'Help me write an email',
-  'Create a meal plan',
-];
 
 export function SearchScreen() {
   const navigate = useNavigate();
-  const { startChat, addMessage } = useAppState();
-  const [mode, setMode] = useState<Mode>('maysi');
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
   function submit(text: string) {
-    const q = text.trim();
-    if (!q) return;
-    if (mode === 'maysi') {
-      startChat(false);
-      addMessage('user', q);
-      navigate('/maysi');
-    } else {
-      setNotice("The amaysim chatbot isn't part of this prototype. Switch to Maysi to ask it.");
-    }
+    if (!text.trim()) return;
+    setNotice("The amaysim chatbot isn't part of this prototype. Switch to Maysi to try it.");
   }
-
-  const chips = mode === 'maysi' ? maysiPrompts : topics;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-white">
@@ -41,22 +21,12 @@ export function SearchScreen() {
 
       <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 text-center">
         <div className="flex size-36 items-center justify-center rounded-full bg-brand-100">
-          {mode === 'maysi' ? (
-            <MaysiAvatar size={72} />
-          ) : (
-            <Search size={56} className="text-brand-500" aria-hidden="true" />
-          )}
+          <Search size={56} className="text-brand-500" aria-hidden="true" />
         </div>
-        <h2 className="mt-6 text-lg font-semibold">
-          {mode === 'maysi' ? 'Ask Maysi anything' : 'What are you looking for?'}
-        </h2>
-        <p className="mt-1 text-sm text-muted">
-          {mode === 'maysi'
-            ? 'Your AI assistant for everyday questions.'
-            : 'Search a keyword or choose a popular topic.'}
-        </p>
+        <h2 className="mt-6 text-lg font-semibold">What are you looking for?</h2>
+        <p className="mt-1 text-sm text-muted">Search a keyword or choose a popular topic.</p>
         <div className="mt-5 flex max-w-xs flex-wrap justify-center gap-2">
-          {chips.map((chip) => (
+          {topics.map((chip) => (
             <button
               key={chip}
               type="button"
@@ -94,7 +64,7 @@ export function SearchScreen() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={mode === 'maysi' ? 'Ask Maysi' : 'Search'}
+            placeholder="Search"
             aria-label="Search"
             className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-muted"
           />
@@ -106,24 +76,17 @@ export function SearchScreen() {
             <button
               type="button"
               role="radio"
-              aria-checked={mode === 'chatbot'}
-              onClick={() => {
-                setMode('chatbot');
-                setNotice(null);
-              }}
-              className={`rounded-full px-2.5 py-1 ${mode === 'chatbot' ? 'bg-neutral-200 font-semibold' : 'text-muted'}`}
+              aria-checked="true"
+              className="rounded-full bg-neutral-200 px-2.5 py-1 font-semibold"
             >
               Chatbot
             </button>
             <button
               type="button"
               role="radio"
-              aria-checked={mode === 'maysi'}
-              onClick={() => {
-                setMode('maysi');
-                setNotice(null);
-              }}
-              className={`flex items-center gap-1 rounded-full px-2.5 py-1 ${mode === 'maysi' ? 'bg-brand-100 font-semibold text-brand-700' : 'text-muted'}`}
+              aria-checked="false"
+              onClick={() => navigate('/maysi/welcome')}
+              className="flex items-center gap-1 rounded-full px-2.5 py-1 text-muted"
             >
               <MaysiAvatar size={14} />
               Maysi
