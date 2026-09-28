@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bedrock browser spike</title>
+    <style>
+      body {
+        font:
+          14px system-ui,
+          sans-serif;
+        max-width: 640px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      label {
+        display: block;
+        margin-top: 0.75rem;
+        font-weight: 600;
+      }
+      input,
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.4rem;
+        font: inherit;
+      }
+      button {
+        margin: 1rem 0.5rem 0 0;
+        padding: 0.4rem 0.8rem;
+      }
+      pre {
+        white-space: pre-wrap;
+        background: #f4f4f4;
+        padding: 0.75rem;
+        min-height: 4rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Bedrock browser spike</h1>
+    <p>Dev-only. The key stays in memory and is only sent to bedrock-runtime.</p>
+    <form id="form">
+      <label for="apiKey">Short-term API key</label>
+      <input id="apiKey" type="password" autocomplete="off" spellcheck="false" required />
+      <label for="region">Region</label>
+      <input id="region" value="ap-southeast-2" required />
+      <label for="modelId">Model ID</label>
+      <input id="modelId" list="models" value="apac.amazon.nova-lite-v1:0" required />
+      <datalist id="models">
+        <option value="apac.amazon.nova-lite-v1:0"></option>
+        <option value="amazon.nova-lite-v1:0"></option>
+      </datalist>
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt" rows="2">Say hello in one short sentence.</textarea>
+      <button type="submit" data-mode="converse">Converse</button>
+      <button type="submit" data-mode="stream">ConverseStream</button>
+      <button type="button" id="stop">Stop</button>
+    </form>
+    <h2>Output</h2>
+    <pre id="output"></pre>
+    <h2>Log</h2>
+    <pre id="log"></pre>
+    <script type="module" src="./bedrock.ts"></script>
+  </body>
+</html>

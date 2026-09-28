@@ -5,6 +5,7 @@ import { ExportScreen } from './screens/ExportScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { SearchScreen } from './screens/SearchScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { useAppState } from './store/appState';
 
@@ -41,6 +42,7 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <MaysiIndex /> },
           { path: 'welcome', element: <WelcomeScreen /> },
+          { path: 'settings', element: <SettingsScreen /> },
           {
             element: <RequireDisclosure />,
             children: [

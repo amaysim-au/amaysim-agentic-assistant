@@ -8,6 +8,8 @@ if (!bedrockModelId) {
   process.exit(1);
 }
 
+// The SDK switches to bearer auth on its own when this variable is set.
+const auth = process.env.AWS_BEARER_TOKEN_BEDROCK ? 'bearer token' : 'AWS credentials';
 const client = new BedrockRuntimeClient({ region: awsRegion });
 
 try {
@@ -19,8 +21,8 @@ try {
     }),
   );
   const reply = response.output?.message?.content?.[0]?.text ?? '(no text)';
-  console.log(`Bedrock OK – ${bedrockModelId} in ${awsRegion} replied: ${reply}`);
+  console.log(`Bedrock OK – ${bedrockModelId} in ${awsRegion} via ${auth} replied: ${reply}`);
 } catch (error) {
-  console.error('Bedrock check failed:', error instanceof Error ? error.message : error);
+  console.error(`Bedrock check failed (${auth}):`, error instanceof Error ? error.message : error);
   process.exit(1);
 }

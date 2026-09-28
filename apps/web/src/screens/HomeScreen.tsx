@@ -31,9 +31,9 @@ export function HomeScreen() {
       <main className="flex-1 overflow-y-auto px-5 pb-6">
         <div className="flex items-center justify-between pt-3">
           <span className="text-2xl font-extrabold tracking-tight text-brand-500">amaysim</span>
-          <button type="button" aria-label="Settings" className="text-brand-500">
+          <Link to="/maysi/settings" aria-label="Settings" className="text-brand-500">
             <Settings size={20} />
-          </button>
+          </Link>
         </div>
 
         <div className="mt-4 flex items-center justify-between text-sm">

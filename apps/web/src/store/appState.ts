@@ -6,13 +6,24 @@ export interface Settings {
   webSearch: boolean;
 }
 
+export interface BedrockSettings {
+  apiKey: string;
+  region: string;
+  modelId: string;
+  expiresAt: number;
+}
+
 export interface AppState {
   settings: Settings;
   acceptDisclosure: () => void;
   setWebSearch: (enabled: boolean) => void;
+  bedrock: BedrockSettings | null;
+  saveBedrock: (settings: BedrockSettings) => void;
+  forgetBedrock: () => void;
   temporary: boolean;
   messages: ChatMessage[];
-  addMessage: (role: Role, content: string) => void;
+  addMessage: (role: Role, content: string) => string;
+  updateMessage: (id: string, content: string) => void;
   startChat: (temporary: boolean) => void;
   loadChat: (chat: Chat) => void;
 }

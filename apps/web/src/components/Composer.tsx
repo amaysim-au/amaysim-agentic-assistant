@@ -1,13 +1,15 @@
-import { ArrowUp, Mic, Plus } from 'lucide-react';
+import { ArrowUp, Mic, Plus, Square } from 'lucide-react';
 import { IconButton } from './IconButton';
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  busy?: boolean;
+  onStop?: () => void;
 }
 
-export function Composer({ value, onChange, onSubmit }: Props) {
+export function Composer({ value, onChange, onSubmit, busy = false, onStop }: Props) {
   const hasText = value.trim().length > 0;
 
   return (
@@ -35,7 +37,16 @@ export function Composer({ value, onChange, onSubmit }: Props) {
         aria-label="Message Maysi"
         className="field-sizing-content max-h-32 min-h-9 flex-1 resize-none bg-transparent py-2 text-sm outline-none placeholder:text-muted"
       />
-      {hasText ? (
+      {busy ? (
+        <button
+          type="button"
+          onClick={onStop}
+          aria-label="Stop reply"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-white transition hover:bg-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+        >
+          <Square size={14} fill="currentColor" />
+        </button>
+      ) : hasText ? (
         <button
           type="submit"
           aria-label="Send message"
