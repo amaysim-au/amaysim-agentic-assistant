@@ -1,381 +1,223 @@
-# AWS Bedrock Integration Plan - Feature/AI-001
+# AWS Bedrock Integration Plan – Feature/AI-001
 
-**Status:** Design phase (ready for execution)
+**Status:** Design (ready for execution)
 **Branch:** `feature/AI-001-bedrock-integration`
-**Target Model:** Amazon Nova Lite (configurable backend selection)
-**API Style:** Bedrock Converse API with SSE streaming
+**Scope:** Proof of concept. Real Bedrock replies for demos, not a production experience.
+**Auth:** Short-term Bedrock API key, pasted by the developer into an in-app Settings screen.
+**Model:** Amazon Nova Lite (exact ID confirmed in Phase 0).
+**API:** Bedrock `ConverseStream`, called directly from the browser.
 
 ---
 
-## Overview
+## Goals and non-goals
 
-This plan integrates AWS Bedrock as the primary LLM backend for the Maysi agentic assistant. The implementation emphasizes:
+**Goals**
 
-- **Provider neutrality** — frontend and API use a simple, Bedrock-agnostic request/response schema
-- **Configurable model selection** — backend controls which model runs; frontend never chooses
-- **Streaming-first** — SSE for real-time response streaming to the web client
-- **Tool architecture** — design for agent tool use but defer implementation until "Hello LLM" succeeds
-- **Safety by design** — Bedrock Guardrails for content filtering
-- **Graceful extensibility** — system prompts and user prompts architected for DB persistence, not yet implemented
+- Optional: with no key saved, the app keeps using mock replies, so everyone else sees the static demo.
+- Only the developer's browser holds the key. No server stores, logs or relays it.
+- Works on the current Amplify static hosting with no backend deploy.
+
+**Non-goals (this iteration)**
+
+- Multi-user auth, per-user rate limiting, production hardening.
+- STS credentials, SSO login in the browser, a server-side proxy (the proxy is a fallback only, see below).
+- Guardrails, tool use, server-held system prompts.
+
+---
+
+## Why short-term API keys
+
+- Generated from an existing SSO session: Bedrock console → **API keys** → **Generate short-term API key**, or the `@aws/bedrock-token-generator` package using an SSO profile.
+- Expire at the earlier of 12 hours or the SSO session expiry. Nothing to revoke by hand.
+- Only work for Bedrock API calls. A leaked key can't touch S3, IAM or anything else the SSO role can reach.
+- A single string sent as `Authorization: Bearer <key>`. No SigV4 signing in the browser.
+- Region-bound: a key generated in `ap-southeast-2` only works against that region's endpoint.
+
+**Caveats**
+
+- The SSO role needs `bedrock:CallWithBearerToken`. An organisation SCP can block it (checked in Phase 0).
+- Keys can't be revoked individually. If one leaks, end the SSO session or wait for it to expire.
+- The key carries all of the role's Bedrock permissions, not just one model. The model choice is only enforced in the client, which is acceptable for a PoC.
 
 ---
 
 ## Architecture
 
-### Component Overview
-
 ```
-┌─ Frontend (React/Vite)
-│  └─ Chat UI → sends provider-neutral JSON to /api/chat
-│
-├─ API (Hono/Node.js)
-│  ├─ /api/chat POST+SSE
-│  │  ├─ Validate and normalize request
-│  │  ├─ Load system prompt + Guardrails config
-│  │  ├─ Map to Bedrock Converse format
-│  │  └─ Stream responses as SSE events
-│  │
-│  └─ Bedrock integration layer
-│     ├─ Converse client (configured model from env)
-│     ├─ Message mapping (frontend schema ↔ Bedrock schema)
-│     ├─ Streaming event emitter
-│     ├─ Usage tracking
-│     └─ Guardrails middleware
-│
-└─ Configuration
-   ├─ .env: BEDROCK_MODEL_ID, BEDROCK_GUARDRAILS_ID, etc.
-   ├─ system-prompts/ directory (future: DB-backed)
-   └─ guardrails config (Bedrock console)
+Browser (Amplify static site)
+├─ Settings screen ─ paste key, region, model ─► localStorage (maysi.bedrock.v1)
+├─ Chat screen
+│  ├─ key present and unexpired ─► lib/bedrock/converse.ts ─► ConverseStream
+│  │                                   HTTPS, Authorization: Bearer <key>
+│  │                                   ─► bedrock-runtime.ap-southeast-2.amazonaws.com
+│  └─ no key ─► existing mock reply
+└─ apps/api (Hono): unchanged, local dev only, never sees the key
 ```
 
-### Request/Response Schema (Frontend ↔ API)
+The key only ever leaves the browser to the AWS Bedrock endpoint, over TLS.
 
-**Request:** `POST /api/chat`
+---
 
-```json
-{
-  "messages": [
-    {
-      "role": "user",
-      "content": "Hello, what is Amaysim?"
-    }
-  ]
-}
+## Key handling rules
+
+- **Storage:** localStorage key `maysi.bedrock.v1` holding `{ apiKey, region, modelId, expiresAt }`. Kept separate from `maysi.settings.v1` so resetting one doesn't touch the other.
+- **Validate on save:** the key must start with `bedrock-api-key-`. Base64-decode the rest (a presigned URL) and read `X-Amz-Date` + `X-Amz-Expires` to get an upper-bound `expiresAt`. If decoding fails, use now + 12h.
+- **On load:** delete the entry if `expiresAt` has passed.
+- **On a 401/403 from Bedrock:** delete the entry, show "Key expired – paste a new one", and fall back to mock replies.
+- **Display:** after saving, never show the full key. Show `bedrock-api-key-…abcd` and "Valid until HH:MM".
+- **Forget key:** a button that removes the entry immediately.
+- **Never** put the key in URLs, console output, error messages, analytics or exported chats.
+
+---
+
+## Phase 0 – Spike (verify before building)
+
+- [x] Confirm model access in `ap-southeast-2` and the model ID to use: on-demand `amazon.nova-lite-v1:0`, or the `apac.amazon.nova-lite-v1:0` inference profile.
+  - `apac.amazon.nova-lite-v1:0` works. Use it as the default.
+- [x] Generate a short-term key and confirm the organisation allows it (`bedrock:CallWithBearerToken`).
+  - Allowed. The decoded key carries `X-Amz-Date` and `X-Amz-Expires=43200` (12h), so the planned expiry parsing works.
+- [ ] Node check: set `AWS_BEARER_TOKEN_BEDROCK` and run `npm run check:bedrock`. The SDK reads the variable itself, so no code change is expected.
+  - Wiring verified with a dummy key (SDK 3.1138.0): bearer auth selected, Bedrock returned "Authentication failed". Needs a real key.
+- [ ] Browser check: from `localhost:5173` and the Amplify domain, call `ConverseStream` with AWS SDK v3 and the bearer token. This confirms CORS on `bedrock-runtime`, bearer auth in the browser SDK, and event-stream decoding in the browser.
+  - Localhost passed with a real key: `Converse` in ~1s, and `ConverseStream` streamed 36 deltas, with the first token at ~1.6s and `end_turn`.
+  - Amplify domain: not yet checked.
+- [ ] If the browser check fails, stop and switch to the fallback proxy below.
+
+**Running the checks**
+
+```powershell
+# Node (from repo root)
+$env:AWS_BEARER_TOKEN_BEDROCK = '<key>'; $env:BEDROCK_MODEL_ID = 'apac.amazon.nova-lite-v1:0'
+npm run check:bedrock
+Remove-Item Env:AWS_BEARER_TOKEN_BEDROCK
 ```
 
-**Response:** SSE stream with newline-delimited JSON events
+- Browser (localhost): `npm run dev`, open `http://localhost:5173/spike/bedrock.html`, paste the key, try **Converse** then **ConverseStream** with each model ID. The spike page is dev-only and not part of `vite build`.
+- Browser (Amplify origin): paste in the DevTools console on the deployed site. Any HTTP status (even 403) means CORS passed; `TypeError: Failed to fetch` means it didn't.
 
+```js
+const key = prompt('Bedrock API key');
+const modelId = encodeURIComponent('apac.amazon.nova-lite-v1:0');
+const res = await fetch(
+  `https://bedrock-runtime.ap-southeast-2.amazonaws.com/model/${modelId}/converse`,
+  {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: [{ text: 'Say ok' }] }],
+      inferenceConfig: { maxTokens: 10 },
+    }),
+  },
+);
+console.log(res.status, await res.json());
 ```
-event: chunk
-data: {"type":"content_block_start","content_block":{"type":"text"}}
 
-event: chunk
-data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello!"}}
+Client config for bearer auth (check against the installed SDK version):
 
-event: chunk
-data: {"type":"content_block_delta","delta":{"type":"text_delta","text":" How can I help?"}}
-
-event: message
-data: {"type":"message_stop","message":{"role":"assistant","content":"Hello! How can I help?"},"usage":{"inputTokens":10,"outputTokens":12}}
-```
-
-**Error Response (also SSE):**
-
-```
-event: error
-data: {"code":"rate_limit","message":"Too many requests. Try again in 60 seconds."}
+```ts
+new BedrockRuntimeClient({
+  region,
+  token: { token: apiKey },
+  authSchemePreference: ['httpBearerAuth'],
+});
 ```
 
 ---
 
-## Phase 1: Core Chat Integration
+## Phase 1 – Settings screen and storage
 
-### Deliverables
-
-1. **Bedrock client initialization** (`src/bedrock/client.ts`)
-   - Initialize BedrockRuntime client with configured region and credentials
-   - Load model ID from env (default: `amazon.nova-lite-v1:0`)
-   - Health check that verifies model access
-
-2. **Message schema mapping** (`src/bedrock/converseMapper.ts`)
-   - Convert frontend `{ role, content }` messages to Bedrock Converse format
-   - Handle text-only content first; image/document support deferred
-   - Map roles: `user` ↔ `user`, `assistant` ↔ `assistant`
-
-3. **System prompt management** (`src/bedrock/systemPrompt.ts`)
-   - Load default system prompt from env or file
-   - Validate prompt length against Bedrock limits
-   - Design for future DB injection (placeholder only)
-
-4. **Bedrock Guardrails integration** (`src/bedrock/guardrails.ts`)
-   - Configure Bedrock Guardrails via config (Bedrock console first)
-   - Pass guardrailConfig in Converse requests
-   - Log and expose guardrail violations in responses
-
-5. **SSE streaming handler** (`src/routes/chat.ts`)
-   - `POST /api/chat` endpoint accepting normalized message schema
-   - Stream Bedrock Converse responses as SSE events
-   - Convert Bedrock streaming events to client events (chunk, message, error)
-   - Include usage metrics (input/output tokens)
-   - Proper error handling and stream termination
-
-6. **Type definitions** (`packages/shared/src/types/chat.ts`)
-   - `ChatRequest`, `ChatMessage`, `ChatResponse`
-   - `StreamEvent` union type (content_block_start, content_block_delta, message_stop, error)
-   - `Usage` metrics
-
-### File Structure
-
-```
-apps/api/src/
-├── bedrock/
-│  ├── client.ts          (Bedrock Runtime client, health check)
-│  ├── converseMapper.ts  (frontend schema → Bedrock Converse)
-│  ├── systemPrompt.ts    (system prompt loading, validation)
-│  ├── guardrails.ts      (Bedrock Guardrails config + apply)
-│  └── types.ts           (internal Bedrock types)
-├── routes/
-│  └── chat.ts            (POST /api/chat SSE handler)
-└── index.ts              (register /api/chat route)
-
-packages/shared/src/
-└── types/
-   └── chat.ts            (ChatRequest, ChatMessage, StreamEvent, etc.)
-```
-
-### Configuration
-
-Add to `.env.example` and `.env` (when available):
-
-```bash
-# Bedrock model selection (backend-controlled)
-BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
-
-# Bedrock Guardrails
-BEDROCK_GUARDRAILS_ID=                  # Leave empty if not using; enable in Phase 1.5
-BEDROCK_GUARDRAILS_VERSION=LATEST       # Or specific version
-
-# System prompt
-SYSTEM_PROMPT_FILE=./prompts/default.txt
-# OR inline (precedence):
-SYSTEM_PROMPT="You are Maysi, an Amaysim assistant. Be helpful and concise."
-
-# AWS region (already exists)
-AWS_REGION=ap-southeast-2
-```
-
-### Dependencies
-
-Ensure installed (check `package.json`):
-
-```json
-"dependencies": {
-  "@aws-sdk/client-bedrock-runtime": "^3.x",
-  "hono": "^4.x"
-}
-```
+- [ ] `apps/web/src/lib/bedrock/apiKey.ts`: `parseApiKey(raw)` returns `{ apiKey, expiresAt }` or an error. `maskApiKey(key)` for display.
+- [ ] Extend `AppState` with `bedrock: BedrockSettings | null`, `saveBedrock()` and `forgetBedrock()`. Persist in `AppStateProvider` under `maysi.bedrock.v1`, pruning expired entries on load.
+- [ ] `apps/web/src/screens/SettingsScreen.tsx` at `/maysi/settings`:
+  - Password-type key input (`autoComplete="off"`, `spellCheck={false}`).
+  - Region (default `ap-southeast-2`) and model ID (default from `VITE_BEDROCK_MODEL_ID`, otherwise Nova Lite).
+  - Status: Not connected / Connected until HH:MM / Expired.
+  - **Test connection** (one short `Converse` call) and **Forget key** buttons.
+  - A short note on how to generate a key.
+- [ ] Wire the existing Settings item in `MenuDrawer.tsx` and the Settings button in `HomeScreen.tsx` to the new route.
 
 ---
 
-## Phase 1.5: Bedrock Guardrails Safety
+## Phase 2 – Streaming chat
 
-### Deliverables
-
-1. **Guardrails configuration** (Bedrock console)
-   - Create a custom Bedrock Guardrails policy via the console
-   - Configure policies for:
-     - Topic filtering (e.g., block account/billing inquiry redirects)
-     - PII detection and redaction
-     - Harmful content filtering
-   - Capture guardrails ID and version
-
-2. **Guardrails middleware** (in `src/bedrock/guardrails.ts`)
-   - Pass guardrailConfig and guardrailVersion to Converse API
-   - Log violations (not exposed to client in Phase 1)
-   - Design for Phase 2 safety dashboard (future)
-
-### Notes
-
-- Guardrails are **optional** but recommended for safety in production
-- Can be toggled via env; leave `BEDROCK_GUARDRAILS_ID` empty to skip
-- User-facing content moderation and account-query redirects are Phase 2+
+- [ ] Add `@aws-sdk/client-bedrock-runtime` to `apps/web`. Load it with dynamic `import()` so it's only fetched when a key is saved.
+- [ ] `lib/bedrock/client.ts`: create the client from the saved settings, reused until the key or region changes.
+- [ ] `lib/bedrock/converse.ts`: `streamChat({ messages, signal, onDelta })`:
+  - Map shared `ChatMessage[]` to Converse messages (text only). Converse needs turns that alternate and start with `user`, so drop leading assistant messages and merge consecutive same-role ones.
+  - Send the system prompt and `inferenceConfig: { maxTokens: 1024 }`.
+  - Emit text deltas, and resolve with the final text and usage.
+  - Honour `AbortSignal` for the stop button.
+- [ ] `lib/bedrock/systemPrompt.ts`: the default Maysi system prompt as a constant.
+- [ ] `AppState`: add `updateMessage(id, content)` so the streaming assistant message can grow in place.
+- [ ] `ChatScreen.tsx`: use `streamChat` when connected, otherwise the existing mock reply. Render tokens as they arrive, add a stop button, and show a friendly error bubble on failure.
 
 ---
 
-## Phase 2: Tool Definitions & Architecture
+## Phase 3 – Hardening (PoC level)
 
-### Scope
-
-Design (but do not implement) tool use infrastructure to support agent capabilities post-Phase 1.
-
-### Deliverables
-
-1. **Tool schema definition** (`src/bedrock/tools.ts`)
-   - Define tool structure matching Bedrock Converse `toolUseBlock` format
-   - Plan tool registry (hardcoded or config-based)
-   - Example tools (placeholders):
-     - `web_search` — invoke external search API
-     - `get_customer_info` — query customer data (Amaysim-specific)
-     - `check_service_status` — network/service status
-
-2. **Tool execution framework** (`src/tools/executor.ts`) — skeleton only
-   - Define `ToolExecutor` interface
-   - Placeholder implementations (return mock responses)
-   - Design for async tool invocation and re-prompting
-
-3. **Converse loop with tool use** (`src/bedrock/converseWithTools.ts`) — skeleton
-   - Detect tool_use blocks in responses
-   - Route to executor
-   - Re-prompt model with results
-   - Design (do not implement loop flow)
-
-### Notes
-
-- No tool invocation until Phase 1 is complete and tested
-- Execution order: "Hello LLM" → tool architecture → tool implementation
+- [ ] Amplify custom headers (Amplify console → Custom headers, or `customHttp.yml`):
+  - `Content-Security-Policy: default-src 'self'; connect-src 'self' https://bedrock-runtime.ap-southeast-2.amazonaws.com; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'` (adjust for any fonts or images in use).
+  - `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`.
+- [ ] Render model output as Markdown with raw HTML disabled (for example `react-markdown` without `rehype-raw`).
+- [ ] Keep `maysi.bedrock.v1` out of chat export and any debug output.
+- [ ] Map errors to messages:
+  - 401/403 or expired token → expired-key flow.
+  - `AccessDeniedException` on the model → "Model not enabled for this role".
+  - `ThrottlingException` → "Busy, try again shortly".
+  - Network or CORS failure → "Can't reach Bedrock".
 
 ---
 
-## Phase 3: Streaming & Frontend Integration
+## Fallback: stateless proxy (only if the Phase 0 browser check fails)
 
-### Scope
-
-Ensure frontend can consume SSE streams correctly and render them in real-time.
-
-### Deliverables (frontend, not API)
-
-1. **SSE client hook** (`apps/web/src/hooks/useChat.ts`)
-   - Handle EventSource / fetch with streaming
-   - Parse newline-delimited JSON events
-   - Buffer and reconstruct message content
-
-2. **Streaming UI updates**
-   - Render tokens as they arrive
-   - Show usage stats on completion
-   - Stop button to abort stream
+- Lambda Function URL with response streaming, CORS limited to the Amplify domain and `localhost:5173`.
+- The browser sends the key in the `Authorization` header on every request. The Lambda forwards it to Bedrock as the bearer token and keeps no session, cache or storage.
+- The proxy has no AWS credentials of its own, so callers without a key get nothing.
+- No request logging (drop `hono/logger`), never log headers or bodies, return sanitised errors, and set CloudWatch retention to 1 day.
+- Allowlist model IDs and cap `maxTokens` on the server.
 
 ---
 
-## Testing Strategy
+## Deferred
 
-### Unit Tests
-
-- **Message mapper**: Frontend schema → Bedrock schema and back
-- **System prompt loader**: Valid/invalid cases, missing files
-- **Guardrails config**: Correct passthrough to Converse
-
-### Integration Tests
-
-1. **Health check**
-   - `npm run check:bedrock` verifies model access
-   - Returns model ID, available tokens, region
-
-2. **Chat endpoint**
-   - Simple request → response (no tool use)
-   - Verify SSE event sequence
-   - Verify usage metrics are present
-
-3. **Error cases**
-   - Invalid messages format
-   - Model not accessible
-   - Guardrails violation (if enabled)
-   - Timeout / stream interruption
-
-### Manual Testing
-
-```bash
-# Start API
-npm run dev -w @maysi/api
-
-# In another terminal, test chat endpoint
-curl -N -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Hello"}]}' \
-  http://localhost:8787/api/chat
-```
+- Bedrock Guardrails (the key's role would also need `bedrock:ApplyGuardrail`).
+- Tool use such as web search (PLAN.md Phase 4).
+- Server-side system prompts, model selection and rate limiting.
+- STS credential or SSO-based auth.
+- Images and documents.
 
 ---
 
-## Execution Checklist
+## Testing
 
-### Phase 1: Core Chat
+**Unit**
 
-- [ ] Install `@aws-sdk/client-bedrock-runtime`
-- [ ] Create `src/bedrock/client.ts` with BedrockRuntime initialization
-- [ ] Create `src/bedrock/converseMapper.ts` for schema mapping
-- [ ] Create `src/bedrock/systemPrompt.ts` for prompt loading
-- [ ] Create `src/bedrock/guardrails.ts` with Guardrails config (stub if no ID)
-- [ ] Add type definitions to `packages/shared/src/types/chat.ts`
-- [ ] Create `src/routes/chat.ts` SSE handler
-- [ ] Update `.env.example` with Bedrock config
-- [ ] Update `src/index.ts` to register `/api/chat` route
-- [ ] Test with `npm run check:bedrock`
-- [ ] Test chat endpoint manually (curl)
-- [ ] Verify Markdown rendering on frontend
+- `parseApiKey`: valid key, wrong prefix, bad base64, expiry extraction.
+- Message mapper: alternation, leading assistant message, empty content.
+- Storage: expired entries are pruned on load.
 
-### Phase 1.5: Guardrails (optional, can defer)
+**Manual**
 
-- [ ] Create Bedrock Guardrails policy (console)
-- [ ] Update `.env` with guardrails ID
-- [ ] Test guardrails violations
-
-### Phase 2: Tool Architecture
-
-- [ ] Define tool schema and registry
-- [ ] Create `ToolExecutor` interface
-- [ ] Skeleton `converseWithTools` loop
-
-### Phase 3: Frontend Integration
-
-- [ ] Create streaming SSE client
-- [ ] Update chat UI to render tokens
-- [ ] Add stop button
+1. No key saved: mock replies behave as they do today.
+2. Paste a key, **Test connection** succeeds, chat streams real replies.
+3. Stop mid-stream.
+4. **Forget key**: mock replies return and the localStorage entry is gone.
+5. Expired or garbage key: expired message shown, entry cleared.
+6. Deployed Amplify build: repeat step 2, and confirm in DevTools that the only calls carrying the key go to `bedrock-runtime`.
 
 ---
 
-## Known Unknowns & Future Decisions
+## Success criteria
 
-1. **Authentication** — no auth in Phase 1; design for per-user rate limiting later
-2. **Conversation persistence** — Phase 3; chats stored in IndexedDB on device
-3. **User system prompts** — architected but not persisted; await DB schema
-4. **Multi-turn state** — maintain message history in request or API session?
-5. **Vision/multimodal** — deferred; placeholder in converseMapper
-6. **Cost tracking** — usage metrics collected, no billing integration
-7. **Model failover** — not architected; pick one model per deployment
+- With a valid key, chat streams real Nova Lite replies on localhost and on Amplify.
+- Without a key, behaviour is identical to today.
+- The key only appears in localStorage and in the `Authorization` header sent to `bedrock-runtime`.
+- No changes to `apps/api` or the `amplify.yml` build.
 
 ---
 
-## Success Criteria
+## Links
 
-1. **Phase 1 complete**
-   - `POST /api/chat` accepts normalized message JSON
-   - Streams SSE events in real time
-   - Returns assistant message + usage metrics
-   - No Bedrock schema leaks to client
-
-2. **Phase 1.5 (optional)**
-   - Guardrails violations logged
-   - Endpoint remains responsive under guardrails blocks
-
-3. **Phase 2 ready**
-   - Tool definitions and interface designed
-   - Loop logic documented (not executing)
-
----
-
-## Dependencies & Links
-
-- [AWS SDK for JavaScript (Bedrock)](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/)
+- [Bedrock API keys](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html)
 - [Bedrock Converse API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html)
-- [Bedrock Guardrails](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html)
 - [Amazon Nova Models](https://aws.amazon.com/bedrock/nova/)
-- [Hono SSE Streaming](https://hono.dev/docs/helpers/streaming)
-
----
-
-## Notes
-
-- All configuration is **backend-driven**; frontend has no model selection
-- Schema is **provider-neutral**; future LLM swaps won't require frontend changes
-- Streaming **must** start in Phase 1; non-streaming chat is insufficient for UX
-- Tool use is **architecturally required** but implementation is post-Phase 1
-- All prompts should be **configurable**; avoid hardcoding beyond defaults

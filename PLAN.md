@@ -42,7 +42,7 @@
 ### Phase 0 – Setup
 
 - [x] Monorepo with `apps/web` and `apps/api`, lint, format and environment config.
-- [ ] AWS credentials and Bedrock model access (verify with `npm run check:bedrock` once `.env` is filled in).
+- [ ] Bedrock model access and a short-term Bedrock API key (verify with `AWS_BEARER_TOKEN_BEDROCK` set and `npm run check:bedrock`). See [docs/BEDROCK_INTEGRATION_PLAN.md](docs/BEDROCK_INTEGRATION_PLAN.md).
 
 ### Phase 1 – UI shell (all static, with mock data)
 
@@ -51,9 +51,9 @@
 
 ### Phase 2 – Core chat
 
-- [ ] `/chat` endpoint that streams from Bedrock over server-sent events (SSE).
+- [ ] Browser calls Bedrock `ConverseStream` directly, using a short-term API key saved in a Settings screen. Mock replies when no key is set. See [docs/BEDROCK_INTEGRATION_PLAN.md](docs/BEDROCK_INTEGRATION_PLAN.md).
 - [ ] Streaming message list, Markdown rendering, suggestion chips, a stop button, and a disclaimer footer.
-- [ ] System prompt and Guardrails.
+- [ ] System prompt. Guardrails deferred for the proof of concept.
 
 ### Phase 3 – History, incognito, export
 
