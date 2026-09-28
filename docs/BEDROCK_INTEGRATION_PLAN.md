@@ -144,14 +144,15 @@ new BedrockRuntimeClient({
 - [x] Add `@aws-sdk/client-bedrock-runtime` to `apps/web`. Load it with dynamic `import()` so it's only fetched when a key is saved.
 - [x] `lib/bedrock/client.ts`: create the client from the saved settings, reused until the key or region changes.
   - Done in Phase 1 for **Test connection**, along with `describeBedrockError()` (the Phase 3 error mapping).
-- [ ] `lib/bedrock/converse.ts`: `streamChat({ messages, signal, onDelta })`:
+- [x] `lib/bedrock/converse.ts`: `streamChat({ messages, signal, onDelta })`:
   - Map shared `ChatMessage[]` to Converse messages (text only). Converse needs turns that alternate and start with `user`, so drop leading assistant messages and merge consecutive same-role ones.
   - Send the system prompt and `inferenceConfig: { maxTokens: 1024 }`.
   - Emit text deltas, and resolve with the final text and usage.
   - Honour `AbortSignal` for the stop button.
-- [ ] `lib/bedrock/systemPrompt.ts`: the default Maysi system prompt as a constant.
-- [ ] `AppState`: add `updateMessage(id, content)` so the streaming assistant message can grow in place.
-- [ ] `ChatScreen.tsx`: use `streamChat` when connected, otherwise the existing mock reply. Render tokens as they arrive, add a stop button, and show a friendly error bubble on failure.
+- [x] `lib/bedrock/systemPrompt.ts`: the default Maysi system prompt as a constant.
+- [x] `AppState`: add `updateMessage(id, content)` so the streaming assistant message can grow in place.
+- [x] `ChatScreen.tsx`: use `streamChat` when connected, otherwise the existing mock reply. Render tokens as they arrive, add a stop button, and show a friendly error bubble on failure.
+  - The error bubble is kept out of `messages`, so it isn't sent back to the model. An expired or invalid key is forgotten, and the bubble links to Settings.
 
 ---
 

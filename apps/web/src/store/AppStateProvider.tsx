@@ -65,10 +65,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setBedrock(null);
   }, []);
   const addMessage = useCallback((role: Role, content: string) => {
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), role, content, createdAt: new Date().toISOString() },
-    ]);
+    const id = crypto.randomUUID();
+    setMessages((prev) => [...prev, { id, role, content, createdAt: new Date().toISOString() }]);
+    return id;
+  }, []);
+  const updateMessage = useCallback((id: string, content: string) => {
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content } : m)));
   }, []);
   const startChat = useCallback((isTemporary: boolean) => {
     setTemporary(isTemporary);
@@ -90,6 +92,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       temporary,
       messages,
       addMessage,
+      updateMessage,
       startChat,
       loadChat,
     }),
@@ -103,6 +106,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       temporary,
       messages,
       addMessage,
+      updateMessage,
       startChat,
       loadChat,
     ],

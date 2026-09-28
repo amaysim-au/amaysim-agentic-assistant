@@ -22,7 +22,8 @@ export interface AppState {
   forgetBedrock: () => void;
   temporary: boolean;
   messages: ChatMessage[];
-  addMessage: (role: Role, content: string) => void;
+  addMessage: (role: Role, content: string) => string;
+  updateMessage: (id: string, content: string) => void;
   startChat: (temporary: boolean) => void;
   loadChat: (chat: Chat) => void;
 }

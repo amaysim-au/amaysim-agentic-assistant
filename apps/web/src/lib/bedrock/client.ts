@@ -7,6 +7,10 @@ export const DEFAULT_MODEL_ID =
 
 let cached: { apiKey: string; region: string; client: Promise<BedrockRuntimeClient> } | null = null;
 
+export function isUnexpired(settings: BedrockSettings | null): settings is BedrockSettings {
+  return settings !== null && settings.expiresAt > Date.now();
+}
+
 export function getBedrockClient({
   apiKey,
   region,

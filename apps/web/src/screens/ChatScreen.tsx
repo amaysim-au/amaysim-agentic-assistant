@@ -1,18 +1,34 @@
+import type { ChatMessage } from '@maysi/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { ChatFooter } from '../components/ChatFooter';
 import { Composer } from '../components/Composer';
 import { MaysiHeader } from '../components/MaysiHeader';
 import { MenuDrawer } from '../components/MenuDrawer';
-import { MessageBubble } from '../components/MessageBubble';
+import { MessageBubble, TypingBubble } from '../components/MessageBubble';
+import { describeBedrockError, isUnexpired, type BedrockErrorKind } from '../lib/bedrock/client';
+import { streamChat } from '../lib/bedrock/converse';
 import { useAppState } from '../store/appState';
 
 const GREETING =
   "Hi! I'm Maysi, your AI assistant. I can help with questions, ideas, research, planning and more.\n\nWhat would you like to chat about?";
 
-// Stand-in until Bedrock streaming is wired up in Phase 2.
+// Used when no Bedrock key is saved.
 const MOCK_REPLY =
   "Thanks for your message! This is a prototype preview, so I can't answer just yet – real responses are coming in the next build phase.";
+
+function mockReply(signal: AbortSignal, onDelta: (text: string) => void) {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      onDelta(MOCK_REPLY);
+      resolve();
+    }, 700);
+    signal.addEventListener('abort', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
 
 const suggestions = [
   'Plan a weekend in Japan',
@@ -55,27 +71,74 @@ function TemporaryEmptyState({ onEnd }: { onEnd: () => void }) {
 
 export function ChatScreen() {
   const navigate = useNavigate();
-  const { messages, addMessage, temporary, startChat } = useAppState();
+  const { messages, addMessage, updateMessage, temporary, startChat, bedrock, forgetBedrock } =
+    useAppState();
   const [draft, setDraft] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<{ kind: BedrockErrorKind; message: string } | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages]);
+  }, [messages, error]);
 
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  // A new chat (from the menu) empties the messages; drop any reply still in flight.
   useEffect(() => {
-    if (messages.at(-1)?.role !== 'user') return;
-    const timer = setTimeout(() => addMessage('assistant', MOCK_REPLY), 700);
-    return () => clearTimeout(timer);
-  }, [messages, addMessage]);
+    if (messages.length === 0) abortRef.current?.abort();
+  }, [messages.length]);
+
+  async function reply(history: ChatMessage[]) {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setBusy(true);
+    setError(null);
+
+    let replyId: string | null = null;
+    let text = '';
+    const onDelta = (delta: string) => {
+      text += delta;
+      if (replyId) updateMessage(replyId, text);
+      else replyId = addMessage('assistant', text);
+    };
+
+    try {
+      if (isUnexpired(bedrock)) {
+        await streamChat({
+          settings: bedrock,
+          messages: history,
+          signal: controller.signal,
+          onDelta,
+        });
+      } else {
+        if (bedrock) forgetBedrock();
+        await mockReply(controller.signal, onDelta);
+      }
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        const described = describeBedrockError(err);
+        if (described.kind === 'auth') forgetBedrock();
+        setError(described);
+      }
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
+      setBusy(false);
+    }
+  }
 
   function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    addMessage('user', trimmed);
+    if (!trimmed || busy) return;
+    const id = addMessage('user', trimmed);
     setDraft('');
+    void reply([
+      ...messages,
+      { id, role: 'user', content: trimmed, createdAt: new Date().toISOString() },
+    ]);
   }
 
   const isEmpty = messages.length === 0;
@@ -117,13 +180,33 @@ export function ChatScreen() {
             {messages.map((m) => (
               <MessageBubble key={m.id} role={m.role} content={m.content} />
             ))}
+            {busy && messages.at(-1)?.role === 'user' && <TypingBubble />}
+            {error && !isEmpty && (
+              <div>
+                <MessageBubble role="assistant" tone="error" content={error.message} />
+                {(error.kind === 'auth' || error.kind === 'model') && (
+                  <Link
+                    to="/maysi/settings"
+                    className="mt-1 ml-9 inline-block text-xs font-semibold text-brand-600 underline"
+                  >
+                    Open settings
+                  </Link>
+                )}
+              </div>
+            )}
             <div ref={endRef} />
           </div>
         )}
       </main>
 
       <div className="px-4 pt-2 pb-3">
-        <Composer value={draft} onChange={setDraft} onSubmit={() => send(draft)} />
+        <Composer
+          value={draft}
+          onChange={setDraft}
+          onSubmit={() => send(draft)}
+          busy={busy}
+          onStop={() => abortRef.current?.abort()}
+        />
         <ChatFooter />
       </div>
 
