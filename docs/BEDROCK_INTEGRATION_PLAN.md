@@ -78,10 +78,11 @@ The key only ever leaves the browser to the AWS Bedrock endpoint, over TLS.
   - Allowed. The decoded key carries `X-Amz-Date` and `X-Amz-Expires=43200` (12h), so the planned expiry parsing works.
 - [ ] Node check: set `AWS_BEARER_TOKEN_BEDROCK` and run `npm run check:bedrock`. The SDK reads the variable itself, so no code change is expected.
   - Wiring verified with a dummy key (SDK 3.1138.0): bearer auth selected, Bedrock returned "Authentication failed". Needs a real key.
-- [ ] Browser check: from `localhost:5173` and the Amplify domain, call `ConverseStream` with AWS SDK v3 and the bearer token. This confirms CORS on `bedrock-runtime`, bearer auth in the browser SDK, and event-stream decoding in the browser.
+- [x] Browser check: from `localhost:5173` and the Amplify domain, call `ConverseStream` with AWS SDK v3 and the bearer token. This confirms CORS on `bedrock-runtime`, bearer auth in the browser SDK, and event-stream decoding in the browser.
   - Localhost passed with a real key: `Converse` in ~1s, and `ConverseStream` streamed 36 deltas, with the first token at ~1.6s and `end_turn`.
-  - Amplify domain: not yet checked.
-- [ ] If the browser check fails, stop and switch to the fallback proxy below.
+  - Amplify domain passed: a `fetch` from the DevTools console returned 200 with a reply (latency ~0.9s).
+- [x] If the browser check fails, stop and switch to the fallback proxy below.
+  - Not needed. The browser path works, so no proxy.
 
 **Running the checks**
 
@@ -126,22 +127,23 @@ new BedrockRuntimeClient({
 
 ## Phase 1 – Settings screen and storage
 
-- [ ] `apps/web/src/lib/bedrock/apiKey.ts`: `parseApiKey(raw)` returns `{ apiKey, expiresAt }` or an error. `maskApiKey(key)` for display.
-- [ ] Extend `AppState` with `bedrock: BedrockSettings | null`, `saveBedrock()` and `forgetBedrock()`. Persist in `AppStateProvider` under `maysi.bedrock.v1`, pruning expired entries on load.
-- [ ] `apps/web/src/screens/SettingsScreen.tsx` at `/maysi/settings`:
+- [x] `apps/web/src/lib/bedrock/apiKey.ts`: `parseApiKey(raw)` returns `{ apiKey, expiresAt }` or an error. `maskApiKey(key)` for display.
+- [x] Extend `AppState` with `bedrock: BedrockSettings | null`, `saveBedrock()` and `forgetBedrock()`. Persist in `AppStateProvider` under `maysi.bedrock.v1`, pruning expired entries on load.
+- [x] `apps/web/src/screens/SettingsScreen.tsx` at `/maysi/settings`:
   - Password-type key input (`autoComplete="off"`, `spellCheck={false}`).
   - Region (default `ap-southeast-2`) and model ID (default from `VITE_BEDROCK_MODEL_ID`, otherwise Nova Lite).
   - Status: Not connected / Connected until HH:MM / Expired.
   - **Test connection** (one short `Converse` call) and **Forget key** buttons.
   - A short note on how to generate a key.
-- [ ] Wire the existing Settings item in `MenuDrawer.tsx` and the Settings button in `HomeScreen.tsx` to the new route.
+- [x] Wire the existing Settings item in `MenuDrawer.tsx` and the Settings button in `HomeScreen.tsx` to the new route.
 
 ---
 
 ## Phase 2 – Streaming chat
 
-- [ ] Add `@aws-sdk/client-bedrock-runtime` to `apps/web`. Load it with dynamic `import()` so it's only fetched when a key is saved.
-- [ ] `lib/bedrock/client.ts`: create the client from the saved settings, reused until the key or region changes.
+- [x] Add `@aws-sdk/client-bedrock-runtime` to `apps/web`. Load it with dynamic `import()` so it's only fetched when a key is saved.
+- [x] `lib/bedrock/client.ts`: create the client from the saved settings, reused until the key or region changes.
+  - Done in Phase 1 for **Test connection**, along with `describeBedrockError()` (the Phase 3 error mapping).
 - [ ] `lib/bedrock/converse.ts`: `streamChat({ messages, signal, onDelta })`:
   - Map shared `ChatMessage[]` to Converse messages (text only). Converse needs turns that alternate and start with `user`, so drop leading assistant messages and merge consecutive same-role ones.
   - Send the system prompt and `inferenceConfig: { maxTokens: 1024 }`.

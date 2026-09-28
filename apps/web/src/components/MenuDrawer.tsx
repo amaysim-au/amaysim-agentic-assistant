@@ -129,7 +129,7 @@ export function MenuDrawer({ onClose }: { onClose: () => void }) {
         <MenuItem icon={FileUp} label="Import chats" />
         <MenuItem icon={FileDown} label="Export chats" onClick={() => go('/maysi/export')} />
         <hr className="mx-3 my-2 border-line" />
-        <MenuItem icon={Settings} label="Settings" />
+        <MenuItem icon={Settings} label="Settings" onClick={() => go('/maysi/settings')} />
         <MenuItem icon={CircleHelp} label="Help & feedback" />
       </nav>
     </div>

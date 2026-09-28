@@ -42,7 +42,7 @@
 ### Phase 0 – Setup
 
 - [x] Monorepo with `apps/web` and `apps/api`, lint, format and environment config.
-- [ ] Bedrock model access and a short-term Bedrock API key (verify with `AWS_BEARER_TOKEN_BEDROCK` set and `npm run check:bedrock`). See [docs/BEDROCK_INTEGRATION_PLAN.md](docs/BEDROCK_INTEGRATION_PLAN.md).
+- [x] Bedrock model access and a short-term Bedrock API key (verify with `AWS_BEARER_TOKEN_BEDROCK` set and `npm run check:bedrock`). See [docs/BEDROCK_INTEGRATION_PLAN.md](docs/BEDROCK_INTEGRATION_PLAN.md).
 
 ### Phase 1 – UI shell (all static, with mock data)
 
