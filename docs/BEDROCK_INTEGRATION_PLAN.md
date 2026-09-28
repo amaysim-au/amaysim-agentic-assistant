@@ -132,6 +132,7 @@ new BedrockRuntimeClient({
 - [x] `apps/web/src/screens/SettingsScreen.tsx` at `/maysi/settings`:
   - Password-type key input (`autoComplete="off"`, `spellCheck={false}`).
   - Region (default `ap-southeast-2`) and model ID (default from `VITE_BEDROCK_MODEL_ID`, otherwise Nova Lite).
+  - The model is picked from a fixed list (`MODEL_OPTIONS` in `lib/bedrock/client.ts`): Nova Lite and Nova Pro (`apac.`), Claude Haiku 4.5 (`au.`) and Nova 2 Lite (`global.`). Any other saved or env model ID falls back to the default. The `global.` profile may process requests outside APAC.
   - Status: Not connected / Connected until HH:MM / Expired.
   - **Test connection** (one short `Converse` call) and **Forget key** buttons.
   - A short note on how to generate a key.
@@ -158,12 +159,18 @@ new BedrockRuntimeClient({
 
 ## Phase 3 – Hardening (PoC level)
 
-- [ ] Amplify custom headers (Amplify console → Custom headers, or `customHttp.yml`):
+- [x] Amplify custom headers (Amplify console → Custom headers, or `customHttp.yml`):
   - `Content-Security-Policy: default-src 'self'; connect-src 'self' https://bedrock-runtime.ap-southeast-2.amazonaws.com; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'` (adjust for any fonts or images in use).
   - `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`.
-- [ ] Render model output as Markdown with raw HTML disabled (for example `react-markdown` without `rehype-raw`).
-- [ ] Keep `maysi.bedrock.v1` out of chat export and any debug output.
-- [ ] Map errors to messages:
+  - Done in `customHttp.yml` at the repo root, with `form-action 'self'` and HSTS added. The file overrides any headers set in the console. The app loads no external fonts or images.
+  - `connect-src` only allows ap-southeast-2. If the Region is changed in Settings, the CSP has to be updated too.
+  - Checked locally by serving `dist` with these headers: the app and the lazy Markdown chunk load, Bedrock is reachable, and other origins are blocked.
+- [x] Render model output as Markdown with raw HTML disabled (for example `react-markdown` without `rehype-raw`).
+  - `components/Markdown.tsx` uses `react-markdown` and `remark-gfm` with no `rehype-raw`, drops images and opens links with `noopener noreferrer`. It is lazy-loaded (about 154 kB), and plain text shows until it loads.
+  - Checked: raw `<script>` and `<img>` are escaped, and `javascript:` links are stripped.
+- [x] Keep `maysi.bedrock.v1` out of chat export and any debug output.
+  - Export is still a placeholder and exports nothing. `src` has no `console.` calls. When export is built, it must only read chats.
+- [x] Map errors to messages (`describeBedrockError()` in `lib/bedrock/client.ts`, done in Phase 1):
   - 401/403 or expired token → expired-key flow.
   - `AccessDeniedException` on the model → "Model not enabled for this role".
   - `ThrottlingException` → "Busy, try again shortly".

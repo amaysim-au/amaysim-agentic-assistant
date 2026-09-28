@@ -1,5 +1,6 @@
 import type { Chat, ChatMessage, Role } from '@maysi/shared';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { DEFAULT_MODEL_ID, isAllowedModel } from '../lib/bedrock/client';
 import { AppStateContext, type AppState, type BedrockSettings, type Settings } from './appState';
 
 const STORAGE_KEY = 'maysi.settings.v1';
@@ -29,7 +30,10 @@ function loadBedrock(): BedrockSettings | null {
       typeof saved.expiresAt === 'number' &&
       saved.expiresAt > Date.now()
     ) {
-      return saved as BedrockSettings;
+      return {
+        ...(saved as BedrockSettings),
+        modelId: isAllowedModel(saved.modelId) ? saved.modelId : DEFAULT_MODEL_ID,
+      };
     }
   } catch {
     // Unreadable entry; drop it below.

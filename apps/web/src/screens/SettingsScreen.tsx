@@ -7,6 +7,8 @@ import {
   DEFAULT_MODEL_ID,
   DEFAULT_REGION,
   describeBedrockError,
+  isAllowedModel,
+  MODEL_OPTIONS,
   testConnection,
 } from '../lib/bedrock/client';
 import { useAppState } from '../store/appState';
@@ -42,7 +44,7 @@ export function SettingsScreen() {
   function handleSave(event: FormEvent) {
     event.preventDefault();
     const nextRegion = region.trim() || DEFAULT_REGION;
-    const nextModelId = modelId.trim() || DEFAULT_MODEL_ID;
+    const nextModelId = isAllowedModel(modelId) ? modelId : DEFAULT_MODEL_ID;
     if (!apiKey.trim() && connected) {
       saveBedrock({ ...bedrock, region: nextRegion, modelId: nextModelId });
       setNotice({ tone: 'ok', text: 'Settings saved.' });
@@ -171,14 +173,18 @@ export function SettingsScreen() {
             />
           </label>
           <label className="block text-sm font-semibold">
-            Model ID
-            <input
+            Model
+            <select
               value={modelId}
               onChange={(e) => setModelId(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
               className={inputClass}
-            />
+            >
+              {MODEL_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
           <button
             type="submit"

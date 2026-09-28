@@ -1,0 +1,12 @@
+customHeaders:
+  - pattern: '**'
+    headers:
+      # Only bedrock-runtime in ap-southeast-2 may receive requests; update if the Settings region changes.
+      - key: 'Content-Security-Policy'
+        value: "default-src 'self'; connect-src 'self' https://bedrock-runtime.ap-southeast-2.amazonaws.com; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+      - key: 'Referrer-Policy'
+        value: 'no-referrer'
+      - key: 'X-Content-Type-Options'
+        value: 'nosniff'
+      - key: 'Strict-Transport-Security'
+        value: 'max-age=31536000; includeSubDomains'

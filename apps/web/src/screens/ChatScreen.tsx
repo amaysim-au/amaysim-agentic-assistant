@@ -15,7 +15,7 @@ const GREETING =
 
 // Used when no Bedrock key is saved.
 const MOCK_REPLY =
-  "Thanks for your message! This is a prototype preview, so I can't answer just yet – real responses are coming in the next build phase.";
+  "Thanks for your message! I'm not connected to Bedrock yet, so I can't answer properly. Add an API key in Settings to chat for real.";
 
 function mockReply(signal: AbortSignal, onDelta: (text: string) => void) {
   return new Promise<void>((resolve) => {

@@ -2,8 +2,23 @@ import type { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
 import type { BedrockSettings } from '../../store/appState';
 
 export const DEFAULT_REGION = 'ap-southeast-2';
-export const DEFAULT_MODEL_ID =
-  (import.meta.env.VITE_BEDROCK_MODEL_ID as string | undefined) || 'apac.amazon.nova-lite-v1:0';
+
+// Inference profile prefix sets where requests may be processed: au, apac or global.
+export const MODEL_OPTIONS = [
+  { id: 'apac.amazon.nova-lite-v1:0', label: 'Amazon Nova Lite (APAC)' },
+  { id: 'apac.amazon.nova-pro-v1:0', label: 'Amazon Nova Pro (APAC)' },
+  { id: 'au.anthropic.claude-haiku-4-5-20251001-v1:0', label: 'Claude Haiku 4.5 (Australia)' },
+  { id: 'global.amazon.nova-2-lite-v1:0', label: 'Amazon Nova 2 Lite (Global)' },
+] as const;
+
+export function isAllowedModel(id: unknown): id is string {
+  return MODEL_OPTIONS.some((option) => option.id === id);
+}
+
+const envModelId = import.meta.env.VITE_BEDROCK_MODEL_ID as string | undefined;
+export const DEFAULT_MODEL_ID: string = isAllowedModel(envModelId)
+  ? envModelId
+  : MODEL_OPTIONS[0].id;
 
 let cached: { apiKey: string; region: string; client: Promise<BedrockRuntimeClient> } | null = null;
 

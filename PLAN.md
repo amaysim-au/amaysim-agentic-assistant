@@ -51,9 +51,9 @@
 
 ### Phase 2 – Core chat
 
-- [ ] Browser calls Bedrock `ConverseStream` directly, using a short-term API key saved in a Settings screen. Mock replies when no key is set. See [docs/BEDROCK_INTEGRATION_PLAN.md](docs/BEDROCK_INTEGRATION_PLAN.md).
-- [ ] Streaming message list, Markdown rendering, suggestion chips, a stop button, and a disclaimer footer.
-- [ ] System prompt. Guardrails deferred for the proof of concept.
+- [x] Browser calls Bedrock `ConverseStream` directly, using a short-term API key saved in a Settings screen. Mock replies when no key is set. See [docs/BEDROCK_INTEGRATION_PLAN.md](docs/BEDROCK_INTEGRATION_PLAN.md).
+- [x] Streaming message list, Markdown rendering, suggestion chips, a stop button, and a disclaimer footer.
+- [x] System prompt. Guardrails deferred for the proof of concept.
 
 ### Phase 3 – History, incognito, export
 
