@@ -42,7 +42,7 @@ export function HomeScreen() {
             <span className="pb-1 text-muted">nbn</span>
           </div>
           <span className="flex items-center gap-1 font-semibold text-brand-600">
-            0421 354 490 <ChevronDown size={16} aria-hidden="true" />
+            0412 345 678 <ChevronDown size={16} aria-hidden="true" />
           </span>
         </div>
 
