@@ -32,11 +32,11 @@ function mockReply(signal: AbortSignal, onDelta: (text: string) => void) {
 
 const suggestions = [
   'Plan a weekend in Japan',
-  'Train for a marathon',
   'Explain something to me',
   'Help me write an email',
   'Compare a few options',
   'Create a meal plan',
+  'Train for a marathon',
 ];
 
 function Sunglasses() {
