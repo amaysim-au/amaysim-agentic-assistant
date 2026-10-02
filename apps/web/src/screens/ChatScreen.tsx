@@ -36,6 +36,7 @@ const suggestions = [
   'Help me write an email',
   'Compare a few options',
   'Create a meal plan',
+  'Train for a marathon',
 ];
 
 function Sunglasses() {
